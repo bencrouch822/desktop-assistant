@@ -1,0 +1,20 @@
+{
+  "name": "time-manager",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron main.js"
+  },
+  "author": "Ben Crouch <bencrouch822@gmail.com",
+  "license": "MIT",
+  "dependencies": {
+    "classlist-polyfill": "^1.0.3",
+    "domify": "^1.4.0",
+    "electron-json-storage": "^2.1.0",
+    "es6-object-assign": "^1.0.3",
+    "simplemde": "^1.11.2",
+    "vex-dialog": "^1.0.6",
+    "vex-js": "^3.0.0"
+  }
+}

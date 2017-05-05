@@ -1,0 +1,7 @@
+{
+    "use_remote": true,
+    "db_address": "bencrouch.me",
+    "db_port": "27017",
+    "db_username": "root",
+    "db_password": ""
+}

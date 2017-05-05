@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<link rel="stylesheet" href="node_modules/vex-js/dist/css/vex.css" />
+	<link rel="stylesheet" href="node_modules/vex-js/dist/css/vex-theme-top.css" />
+	<link rel="stylesheet" type="text/css" href="style.css">
+	<link href="https://cdn.quilljs.com/1.1.5/quill.snow.css" rel="stylesheet">
+
+</head>
+
+<body>
+	<div class="header">
+		<div class="col">
+			<h2 id="dateDay"><h2>
+			<h4 id="dateMonth"></h4>
+		</div>
+
+		<div class="col">
+			<center>
+			<div class="round-button" id="clock" style="width: 35px; font-size: .75em; margin-right: 6px; padding-bottom: 5px;">
+				<div class="round-button-circle" style="">
+					<img class="round-button-icon" src="src/clock.png"/>
+				</div>
+			</div>
+
+			<div class="round-button" id="notes" style="width: 35px; font-size: .75em; margin-right: 6px; margin-left: 6px; padding-bottom: 5px;">
+				<div class="round-button-circle" style="">
+					<img class="round-button-icon" src="src/notes.png"/>
+				</div>
+			</div>
+
+			<div class="round-button" id="add" style="width:55px; font-size: 1em; margin-right: 6px; margin-left: 6px;">
+				<div class="round-button-circle" id="add-circle" style="">
+					<img class="round-button-icon" id="add-icon" src="src/add.png"/>
+				</div>
+			</div>
+
+			<div class="round-button" id="play" style="width: 35px; font-size: .75em; margin-left: 6px; margin-right: 6px; padding-bottom: 5px;">
+				<div class="round-button-circle" style="">
+					<img class="round-button-icon" id="play-icon" src="src/play.png"/>
+				</div>
+			</div>
+			
+			<div class="round-button" id="options" style="width: 35px; font-size: .75em; margin-left: 6px; padding-bottom: 5px;">
+				<div class="round-button-circle" style="">
+					<img class="round-button-icon" id="options-icon" src="src/options.png"/>
+				</div>
+			</div>
+		</center>
+		</div>
+
+		<div class="col">
+			<h2 id="weather-temp"></h2>
+			<h4 id="weather-summary"></h4>
+		</div>
+	</div>
+
+	<div class="main">
+		<div class="tab" id="tab-notes">
+			<div id="notes-text" style="height: 75vh;"></div>
+		</div>
+		<div class="tab " id="tab-add">
+			<p class="secondary">You don't seem to have anything to do.</p>
+		</div>
+		<div class="tab" id="tab-play">
+			<audio id="audio-rainymood" style="visibility: hidden;">
+				<source src="src/audio-rainymood.mp3" type="audio/mpeg">
+			</audio>
+		</div>
+		<div class="tab" id="tab-clock">
+			<h2 id="clockp">Nothing to show yet.</h2>
+		</div>
+	</div>
+</body>
+</html>
+
+
+<script src="https://cdn.quilljs.com/1.1.5/quill.js"></script>
+<script type="text/javascript">
+	var primaryColor = "";
+	var seconaryColor = "";
+	var locObj = null;
+
+	window.$ = window.jQuery = require('jquery');
+
+	document.getElementById("tab-notes").style.display = 'none';
+	document.getElementById("tab-clock").style.display = 'none';
+	document.getElementById("tab-add").style.display = 'block';
+
+	const storage = require('electron-json-storage');
+	var zipCodes = require('zipcodes');
+	var vex = require('vex-js');
+	vex.registerPlugin(require('vex-dialog'));
+	vex.defaultOptions.className = 'vex-theme-top';
+
+	//===== Date and Weather =====//
+	var dateDay = document.getElementById("dateDay");
+	var dateMonth = document.getElementById("dateMonth");
+	var d = new Date();
+
+	var weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+	var monthNames = ["January", "February", "March", "April", "May", "June",
+	  "July", "August", "September", "October", "November", "December"
+	];
+
+	dateDay.innerHTML = weekdayNames[d.getDay()] + " " + d.getDate() + getDaySuffix(d.getDate());
+	dateMonth.innerHTML = monthNames[d.getMonth()] + " " + d.getFullYear();
+
+	storage.get('location', function(error, data){
+		if(error) throw error;
+		if(!data.hasOwnProperty('latitude') || !data.hasOwnProperty('longitude') || !data.hasOwnProperty('city')) {
+			zipCodePrompt();
+			return;
+		}
+		locObj = data;
+		loadWeather(data.latitude, data.longitude, data.city);
+	});
+
+	//===== Notes =====//
+	var quill = new Quill('#notes-text', {
+		theme: 'snow'
+	});
+
+	storage.get('notes', function(error, data){
+		if(error) throw error;
+		if(data.hasOwnProperty('text')){
+			//fill notepad
+			quill.setContents(data.text);
+		}
+	});
+
+	quill.on('editor-change', function(eventName, ...args){
+		if(eventName === 'text-change' || eventName === 'selection-change'){
+			//Save text
+			var txt = quill.getContents();
+			storage.set('notes', { text: txt}, function(error) {
+				if (error) throw error;
+			});
+
+			if(config.use_remote){
+				//save to remote
+			}
+		}
+	});
+
+	//===== Menu =====//
+	var onAdd = false;
+	document.getElementById("add").addEventListener("click", function(){
+		document.getElementById("tab-notes").style.display = 'none';
+		document.getElementById("tab-clock").style.display = 'none';
+		document.getElementById("tab-add").style.display = 'block';
+
+		if(document.getElementById("add-icon").getAttribute("src") == "src/add.png"){
+			vex.dialog.prompt({
+				message: 'What do you need to do?',
+				placeholder: 'Task',
+				callback: function (text) {
+					if(text != null){
+						var taskText = text;
+						var taskDate = null;
+						vex.dialog.open({
+							message: 'When does it need to be finished?',
+							buttons: 
+							[{
+								type: 'submit',
+								text: 'Add',
+								className: 'vex-dialog-button-primary'
+							},{
+								type: 'submit',
+								text: 'No date',
+								className: 'vex-dialog-button-default'
+							}]
+						});
+					} 
+				}
+			});
+		} else {
+			document.getElementById("add-icon").src = "src/add.png";
+		}	
+	});
+	
+	var playing = false;
+	document.getElementById("play").addEventListener("click", function(){
+		if(!playing){
+			playing = true;
+			document.getElementById("audio-rainymood").play();
+			document.getElementById("play-icon").src = "src/pause.png";
+		} else {
+			playing = false;
+			document.getElementById("audio-rainymood").pause();
+			document.getElementById("play-icon").src = "src/play.png";
+		}
+	});
+	document.getElementById("notes").addEventListener("click", function(){
+		document.getElementById("tab-add").style.display = 'none';
+		document.getElementById("tab-clock").style.display = 'none';
+		document.getElementById("tab-notes").style.display = 'block';
+		document.getElementById("add-icon").src = "src/todo.png";
+	});
+	document.getElementById("clock").addEventListener("click", function(){
+		document.getElementById("tab-add").style.display = 'none';
+		document.getElementById("tab-notes").style.display = 'none';
+		document.getElementById("tab-clock").style.display = 'block';
+		document.getElementById("add-icon").src = "src/todo.png";
+	});
+	document.getElementById("options").addEventListener("click", function(){
+		vex.dialog.open({
+			message: 'Version: 1.0.0 - Up to date',
+			buttons: 
+			[{
+				type: 'submit',
+				text: 'Check for Updates',
+				className: 'vex-dialog-button-primary'
+			}]
+		});
+	});
+
+	//===== Clock Tab =====//
+	clock(); //Load clock
+
+	//===== Various Methods =====//
+	function getDaySuffix(day){
+		if(day == 1){
+			return "st";
+		} else if(day == 2){
+			return "nd";
+		} else if(day == 3){
+			return "rd";
+		} else {
+			return "th";
+		}
+	}
+
+	//Uses 'vex-js' (hs) to prompt user to enter zipcode for weather forecast. 
+	function zipCodePrompt(){
+		vex.dialog.prompt({
+		    message: 'Please enter your ZIP Code for weather services.',
+		    placeholder: 'Zip Code',
+		    callback: function (zip) {
+				if(zip != null){
+					getLocationFromZip(zip);
+				} else {
+					zipCodePrompt();
+				}
+		    }
+		});
+	}
+
+	//Uses darksky.net API to get weather from latitude and logitude. Sets values to weather elements. 
+	//Working on finding a better free alternative. 
+	function loadWeather(lat, long, city){
+		var url = "https://api.darksky.net/forecast/c43e6bc144da4fa4490cd7065327b1bf/" + lat + "," + long;
+		var xhr = new XMLHttpRequest();
+
+		xhr.onreadystatechange = function(){
+			if(xhr.readyState === XMLHttpRequest.DONE){
+				if(xhr.status === 200){
+					var jsonReturn = JSON.parse(xhr.responseText);
+					document.getElementById("weather-temp").innerHTML = Math.round(jsonReturn.currently.temperature) + "&deg;";
+					document.getElementById("weather-summary").innerHTML = jsonReturn.currently.summary + " &bull; " + city;
+				} else {
+					//Weather didn't load
+				}
+			}
+		};
+
+		xhr.open("GET", url, true);
+		xhr.send();
+
+		if(locObj != null) setInterval (loadWeather(locObj.latitude, locObj.longitude, locObj.city), 3600000); //update every hour
+	}
+
+	//Uses 'zipcodes' (davglass) to get latitude and longitude from zipcode. Sets values to 'location' storage. 
+	function getLocationFromZip(zip){
+		var location = zipCodes.lookup(zip);
+		storage.set('location', { latitude: location.latitude, longitude: location.longitude, city: location.city}, function(error) {
+			if (error) throw error;
+		});
+		loadWeather(location.latitude, location.longitude, location.city);
+	}
+
+	function clock(){ //Date defined 'd' previously 
+		var time = new Date();
+		var hour = time.getHours();
+		var min = time.getMinutes();
+		var sec = time.getSeconds();
+		var period = "";
+
+		if(hour > 12){
+			period = "PM";
+			hour -= 12; //To get it in a 1-12 format
+		}
+
+		if(min < 10) min = "0" + min;
+		if(sec < 10) sec = "0" + sec;
+		document.getElementById("clockp").innerHTML = hour + ":" + min + ":" + sec + " " + period;
+		setInterval ( clock, 3600000); //update every hour
+	}
+</script>
